@@ -27,7 +27,7 @@ This project is an API service for automatic diarization (speaker recognition) a
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository_url>
+    git clone https://github.com/ChornyiDev/pyannote-goggle-stt-video-transcript.git
     cd video-transcript
     ```
 
