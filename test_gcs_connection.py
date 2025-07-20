@@ -3,65 +3,65 @@ from dotenv import load_dotenv
 from google.cloud import storage
 from google.api_core import exceptions
 
-# Завантажуємо змінні середовища з файлу .env
+ # Load environment variables from .env file
 load_dotenv()
 
 def test_gcs_connection():
     """
-    Перевіряє підключення до Google Cloud Storage та доступ до вказаного сховища.
+    Checks connection to Google Cloud Storage and access to the specified bucket.
     """
-    print("--- Початок тесту підключення до GCS ---")
+    print("--- Starting GCS connection test ---")
 
-    # 1. Перевірка наявності змінної середовища
+    # 1. Check for environment variable
     bucket_name_full = os.getenv('FIREBASE_STORAGE_BUCKET')
     if not bucket_name_full:
-        print("ПОМИЛКА: Змінна середовища FIREBASE_STORAGE_BUCKET не знайдена у файлі .env.")
+        print("ERROR: Environment variable FIREBASE_STORAGE_BUCKET not found in .env file.")
         return
 
-    print(f"Знайдено повну назву сховища: {bucket_name_full}")
+    print(f"Found full bucket name: {bucket_name_full}")
 
-    # 2. Використання повної назви сховища без змін
+    # 2. Use full bucket name as is
     parsed_bucket_name = bucket_name_full
-    print(f"Спроба підключення до сховища з назвою: '{parsed_bucket_name}'")
+    print(f"Attempting to connect to bucket named: '{parsed_bucket_name}'")
 
-    # 3. Перевірка облікових даних
+    # 3. Check credentials
     if not os.getenv('GOOGLE_APPLICATION_CREDENTIALS'):
-        print("ПОМИЛКА: Змінна середовища GOOGLE_APPLICATION_CREDENTIALS не знайдена.")
-        print("Переконайтеся, що у файлі .env є рядок: GOOGLE_APPLICATION_CREDENTIALS=service_account.json")
+        print("ERROR: Environment variable GOOGLE_APPLICATION_CREDENTIALS not found.")
+        print("Make sure your .env file contains: GOOGLE_APPLICATION_CREDENTIALS=service_account.json")
         return
     
     credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
     if not os.path.exists(credentials_path):
-        print(f"ПОМИЛКА: Файл облікових даних '{credentials_path}' не знайдено.")
+        print(f"ERROR: Credentials file '{credentials_path}' not found.")
         return
     
-    print(f"Використовую файл облікових даних: {credentials_path}")
+    print(f"Using credentials file: {credentials_path}")
 
-    # 4. Спроба підключення
+    # 4. Attempt connection
     try:
         storage_client = storage.Client()
         bucket = storage_client.get_bucket(parsed_bucket_name)
-        print("\n✅ УСПІХ! Підключення до сховища успішне.")
-        print(f"  ID Сховища: {bucket.id}")
-        print(f"  Назва: {bucket.name}")
-        print(f"  Розташування: {bucket.location}")
-        print(f"  Час створення: {bucket.time_created}")
+        print("\n✅ SUCCESS! Connected to bucket.")
+        print(f"  Bucket ID: {bucket.id}")
+        print(f"  Name: {bucket.name}")
+        print(f"  Location: {bucket.location}")
+        print(f"  Creation time: {bucket.time_created}")
 
     except exceptions.NotFound:
-        print(f"\n❌ ПОМИЛКА 404: Сховище з назвою '{parsed_bucket_name}' не знайдено.")
-        print("  Перевірте, чи правильно вказана назва у FIREBASE_STORAGE_BUCKET у файлі .env.")
-        print("  Також необхідно переконатися, що сервісний акаунт має дозвіл 'Storage Object Viewer' для цього сховища.")
+        print(f"\n❌ ERROR 404: Bucket named '{parsed_bucket_name}' not found.")
+        print("  Check that the name in FIREBASE_STORAGE_BUCKET in your .env file is correct.")
+        print("  Also make sure the service account has 'Storage Object Viewer' permission for this bucket.")
     
     except exceptions.Forbidden:
-        print(f"\n❌ ПОМИЛКА 403: Доступ до сховища '{parsed_bucket_name}' заборонено.")
-        print("  Це означає, що облікові дані правильні, але у сервісного акаунта недостатньо прав.")
-        print("  Необхідно перейти у Google Cloud Console -> IAM & Admin -> Service Accounts,")
-        print("  знайти відповідний акаунт та надати йому роль 'Storage Admin' або принаймні 'Storage Object Admin'.")
+        print(f"\n❌ ERROR 403: Access to bucket '{parsed_bucket_name}' is forbidden.")
+        print("  This means the credentials are correct, but the service account does not have enough rights.")
+        print("  Go to Google Cloud Console -> IAM & Admin -> Service Accounts,")
+        print("  find the relevant account and grant it the 'Storage Admin' or at least 'Storage Object Admin' role.")
 
     except Exception as e:
-        print(f"\n❌ ВИНИКЛА ІНША ПОМИЛКА: {e}")
+        print(f"\n❌ OTHER ERROR OCCURRED: {e}")
 
-    print("\n--- Тест завершено ---")
+    print("\n--- Test completed ---")
 
 
 if __name__ == "__main__":

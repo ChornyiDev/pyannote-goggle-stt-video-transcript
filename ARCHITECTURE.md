@@ -1,72 +1,72 @@
-# Архітектура Системи
+# System Architecture
 
-Цей документ описує архітектуру API-сервісу для діаризації та транскрипції медіафайлів.
-
----
-
-## 1. Компоненти Системи
-
-Система побудована на мікросервісній архітектурі та складається з наступних ключових компонентів:
-
-1.  **API-сервер (Flask):**
-    -   Приймає `POST` запити на ендпоінт `/api/transcribe`.
-    -   Валідує вхідні дані (`media_url`, `firestore_ref` і т.д.).
-    -   Негайно ставить "важке" завдання з обробки медіа в чергу Redis.
-    -   Миттєво відповідає клієнту, не блокуючи з'єднання.
-    -   Також надає ендпоінт `/api/health` для моніторингу стану черги.
-
-2.  **Черга завдань (Redis + RQ):**
-    -   Використовується для керування асинхронними завданнями.
-    -   Дозволяє API-серверу залишатися швидким та відзивчивим, переносячи тривалі операції у фоновий режим.
-
-3.  **Фоновий Воркер (RQ Worker):**
-    -   Окремий процес, який запускається разом з основним додатком.
-    -   Постійно слухає чергу Redis.
-    -   Коли з'являється нове завдання, воркер забирає його і послідовно виконує всі етапи обробки.
-
-4.  **Сервіси Google Cloud & Firebase:**
-    -   **Firebase Firestore:** Використовується як база даних для зберігання статусів обробки (`QUEUED`, `DOWNLOADING`, `PROCESSING`, `DONE`, `ERROR`) та фінального результату (транскрипту, метаданих).
-    -   **Google Cloud Storage:** Використовується для тимчасового зберігання довгих аудіосегментів (> 60 секунд) для їх асинхронної транскрипції.
+This document describes the architecture of the API service for diarization and transcription of media files.
 
 ---
 
-## 2. Життєвий Цикл Запиту
+## 1. System Components
 
-1.  **Ініціація:** Клієнт надсилає `POST` запит на `/api/transcribe` з URL медіафайлу та посиланням на документ у Firestore.
+The system is built on a microservice architecture and consists of the following key components:
 
-2.  **Постановка в чергу:**
-    -   Flask-сервер отримує запит.
-    -   Оновлює документ у Firestore, встановлюючи `status: 'QUEUED'` та час `received_at`.
-    -   Створює завдання `process_media_task` і додає його в чергу Redis.
-    -   Відповідає клієнту `{"message": "Processing started"}`.
+1.  **API Server (Flask):**
+    -   Accepts `POST` requests at the `/api/transcribe` endpoint.
+    -   Validates input data (`media_url`, `firestore_ref`, etc.).
+    -   Immediately puts heavy media processing tasks into the Redis queue.
+    -   Responds to the client instantly, without blocking the connection.
+    -   Also provides the `/api/health` endpoint for queue monitoring.
 
-3.  **Виконання у Воркері:**
-    -   RQ воркер у фоновому режимі забирає завдання з черги.
-    -   **Завантаження:**
-        -   Оновлює статус у Firestore на `DOWNLOADING`.
-        -   Завантажує медіафайл за вказаним URL.
-    -   **Конвертація:**
-        -   Конвертує завантажений файл у формат WAV (`mono`, `16000 Hz`) за допомогою **FFMPEG**. Використовується бібліотека `ffmpeg-python` з прапорцем `-nostdin` для стабільної роботи у фоновому режимі.
-    -   **Діаризація:**
-        -   Оновлює статус на `PROCESSING`.
-        -   Застосовує модель `pyannote/speaker-diarization` для розбиття аудіо на сегменти за спікерами.
-    -   **Транскрипція (Паралельна):**
-        -   Усі отримані аудіосегменти відправляються на транскрипцію до Google Cloud Speech-to-Text **одночасно** за допомогою `ThreadPoolExecutor`.
-        -   **Обробка довгих сегментів:** Якщо сегмент довший за 60 секунд, він завантажується в Google Cloud Storage і транскрибується за допомогою асинхронного API (`long_running_recognize`).
-    -   **Завершення:**
-        -   Результати транскрипції збираються та сортуються.
-        -   Документ у Firestore оновлюється: `status: 'DONE'`, додається фінальний транскрипт, метадані та час `finished_at`.
-    -   **Обробка помилок:** Якщо на будь-якому етапі виникає помилка, статус змінюється на `ERROR`, записується повідомлення про помилку та час `finished_at`.
-    -   **Очищення:** Усі тимчасові файли (завантажене медіа, WAV, аудіосегменти) видаляються з локального сховища сервера.
+2.  **Task Queue (Redis + RQ):**
+    -   Used for managing asynchronous tasks.
+    -   Allows the API server to remain fast and responsive by offloading long operations to the background.
+
+3.  **Background Worker (RQ Worker):**
+    -   A separate process launched alongside the main application.
+    -   Continuously listens to the Redis queue.
+    -   When a new task appears, the worker picks it up and sequentially executes all processing stages.
+
+4.  **Google Cloud & Firebase Services:**
+    -   **Firebase Firestore:** Used as a database to store processing statuses (`QUEUED`, `DOWNLOADING`, `PROCESSING`, `DONE`, `ERROR`) and the final result (transcript, metadata).
+    -   **Google Cloud Storage:** Used for temporary storage of long audio segments (> 60 seconds) for asynchronous transcription.
 
 ---
 
-## 3. Запуск Додатку
+## 2. Request Lifecycle
 
-Додаток запускається як Python-модуль з кореневої директорії. Це критично важливо для правильної роботи відносних імпортів між файлами проєкту.
+1.  **Initiation:** The client sends a `POST` request to `/api/transcribe` with the media file URL and a reference to a Firestore document.
+
+2.  **Queueing:**
+    -   The Flask server receives the request.
+    -   Updates the Firestore document, setting `status: 'QUEUED'` and the `received_at` timestamp.
+    -   Creates a `process_media_task` and adds it to the Redis queue.
+    -   Responds to the client with `{"message": "Processing started"}`.
+
+3.  **Worker Execution:**
+    -   The RQ worker in the background picks up the task from the queue.
+    -   **Downloading:**
+        -   Updates the status in Firestore to `DOWNLOADING`.
+        -   Downloads the media file from the specified URL.
+    -   **Conversion:**
+        -   Converts the downloaded file to WAV format (`mono`, `16000 Hz`) using **FFMPEG**. The `ffmpeg-python` library is used with the `-nostdin` flag for stable background operation.
+    -   **Diarization:**
+        -   Updates the status to `PROCESSING`.
+        -   Applies the `pyannote/speaker-diarization` model to split audio into speaker segments.
+    -   **Transcription (Parallel):**
+        -   All obtained audio segments are sent for transcription to Google Cloud Speech-to-Text **simultaneously** using `ThreadPoolExecutor`.
+        -   **Long segment handling:** If a segment is longer than 60 seconds, it is uploaded to Google Cloud Storage and transcribed using the asynchronous API (`long_running_recognize`).
+    -   **Completion:**
+        -   Transcription results are collected and sorted.
+        -   The Firestore document is updated: `status: 'DONE'`, final transcript, metadata, and `finished_at` timestamp are added.
+    -   **Error handling:** If an error occurs at any stage, the status is changed to `ERROR`, an error message and `finished_at` timestamp are recorded.
+    -   **Cleanup:** All temporary files (downloaded media, WAV, audio segments) are deleted from the server's local storage.
+
+---
+
+## 3. Application Launch
+
+The application is launched as a Python module from the project root directory. This is critical for correct relative imports between project files.
 
 ```bash
 python3 -m src.app
 ```
 
-При старті `src/app.py` автоматично запускає процес воркера за допомогою модуля `multiprocessing`.
+When started, `src/app.py` automatically launches the worker process using the `multiprocessing` module.

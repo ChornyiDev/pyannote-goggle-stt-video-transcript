@@ -1,126 +1,127 @@
-# API для Обробки Медіафайлів
 
-Цей проєкт є API-сервісом для автоматичної діаризації (розпізнавання спікерів) та транскрипції (перетворення мови в текст) аудіо та відео.
+# Media File Processing API
 
-## 🚀 Технології
+This project is an API service for automatic diarization (speaker recognition) and transcription (speech-to-text) of audio and video files.
 
--   **Сервер:** Flask
--   **Фонові задачі:** Redis + RQ (Redis Queue)
--   **Діаризація:** `pyannote
--   **Транскрипція:** Google Cloud Speech-to-Text
--   **Зберігання даних:** Firebase (Firestore, Storage)
--   **Конвертація:** FFMPEG
+## 🚀 Technologies
+
+-   **Server:** Flask
+-   **Background tasks:** Redis + RQ (Redis Queue)
+-   **Diarization:** `pyannote`
+-   **Transcription:** Google Cloud Speech-to-Text
+-   **Data storage:** Firebase (Firestore, Storage)
+-   **Conversion:** FFMPEG
 
 ---
 
-## 🛠️ Налаштування
+## 🛠️ Setup
 
-### 1. Передумови
+### 1. Prerequisites
 
 -   **Python 3.9+**
--   **FFMPEG:** Встановіть `ffmpeg` у вашій системі.
+-   **FFMPEG:** Install `ffmpeg` on your system.
     -   **Ubuntu/Debian:** `sudo apt update && sudo apt install ffmpeg`
     -   **macOS (Homebrew):** `brew install ffmpeg`
 
-### 2. Встановлення
+### 2. Installation
 
-1.  **Клонуйте репозиторій:**
+1.  **Clone the repository:**
     ```bash
     git clone <repository_url>
     cd video-transcript
     ```
 
-2.  **Створіть віртуальне середовище:**
+2.  **Create a virtual environment:**
     ```bash
     python3 -m venv venv
     source venv/bin/activate
     ```
 
-3.  **Встановіть залежності:**
+3.  **Install dependencies:**
     ```bash
     pip install -r requirements.txt
     ```
 
-### 3. Конфігурація
+### 3. Configuration
 
-1.  **Створіть файл `.env`** у корені проєкту та додайте наступні змінні:
+1.  **Create a `.env` file** in the project root and add the following variables:
 
     ```env
-    # Доступ до Google Cloud та Firebase
+    # Google Cloud and Firebase credentials
     GOOGLE_APPLICATION_CREDENTIALS=service_account.json
     FIREBASE_CREDENTIALS_PATH=service_account.json
     FIREBASE_STORAGE_BUCKET=your-bucket-name.appspot.com
 
-    # URL вашого Redis
+    # Your Redis URL
     REDIS_URL=redis://localhost:6379
 
-    # Токен доступу до Hugging Face
+    # Hugging Face access token
     HUGGING_FACE_TOKEN=your_hugging_face_token
     ```
 
-2.  **Авторизуйтесь у Hugging Face:**
+2.  **Login to Hugging Face:**
     ```bash
     huggingface-cli login
     ```
 
-3.  **Прийміть умови використання моделі:**
+3.  **Accept model usage terms:**
     -   [pyannote/speaker-diarization](https://huggingface.co/pyannote/speaker-diarization)
 
 ---
 
-## ▶️ Запуск
+## ▶️ Running
 
-Для запуску сервера та воркера виконайте команду з **кореневої директорії проєкту**:
+To start the server and worker, run the command from the **project root directory**:
 
 ```bash
-# Активуйте віртуальне середовище
+# Activate the virtual environment
 # source venv/bin/activate
 
 python3 -m src.app
 ```
 
-**Важливо:** Запуск через `python3 -m src.app` є критичним для правильної роботи імпортів.
+**Important:** Running via `python3 -m src.app` is critical for correct imports.
 
-Сервер буде доступний за адресою `http://localhost:5012`.
+The server will be available at `http://localhost:5012`.
 
 ---
 
-## ⚙️ Вибір моделі діаризації
+## ⚙️ Diarization Model Selection
 
-Передбачена можливість легко змінити модель, яка використовується для діаризації, щоб знайти баланс між швидкістю та точністю.
+You can easily change the diarization model to balance speed and accuracy.
 
-1.  **Відкрити файл:** `src/core/diarization.py`
-2.  **Знайти рядок** з `Pipeline.from_pretrained(...)`.
-3.  **Замінити назву моделі** на одну з наведених нижче.
+1.  **Open the file:** `src/core/diarization.py`
+2.  **Find the line** with `Pipeline.from_pretrained(...)`.
+3.  **Replace the model name** with one of the options below.
 
-#### Доступні моделі:
+#### Available models:
 
 -   `pyannote/speaker-diarization@2.1`
-    -   **Швидкість:** Висока (рекомендовано для CPU).
-    -   **Точність:** Добра.
-    -   **Необхідно прийняти умови:**
+    -   **Speed:** High (recommended for CPU).
+    -   **Accuracy:** Good.
+    -   **Terms to accept:**
         -   [pyannote/speaker-diarization](https://huggingface.co/pyannote/speaker-diarization)
         -   [pyannote/segmentation](https://huggingface.co/pyannote/segmentation)
 
 -   `pyannote/speaker-diarization-3.1`
-    -   **Швидкість:** Низька (рекомендовано **тільки** для GPU).
-    -   **Точність:** Дуже висока.
-    -   **Необхідно прийняти умови:**
+    -   **Speed:** Low (recommended **only** for GPU).
+    -   **Accuracy:** Very high.
+    -   **Terms to accept:**
         -   [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
         -   [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0)
 
-**Важливо:** Перед використанням нової моделі необхідно переконатися, що умови її використання (та її залежностей) прийняті на сайті Hugging Face.
+**Important:** Before using a new model, make sure you have accepted its terms (and its dependencies) on the Hugging Face website.
 
 ---
 
 ## 🔌 API
 
-### Запуск обробки
+### Start Processing
 
--   **Ендпоінт:** `POST /api/transcribe`
--   **Опис:** Ініціює асинхронну обробку медіафайлу.
+-   **Endpoint:** `POST /api/transcribe`
+-   **Description:** Initiates asynchronous media file processing.
 
--   **Тіло запиту (JSON):**
+-   **Request body (JSON):**
     ```json
     {
       "media_url": "gs://your-bucket/path/to/file.mp4",
@@ -130,14 +131,14 @@ python3 -m src.app
     }
     ```
 
--   **Відповідь (202):**
+-   **Response (202):**
     ```json
     {
       "message": "Processing started"
     }
     ```
 
-### Перевірка стану
+### Check Status
 
--   **Ендпоінт:** `GET /api/health`
--   **Опис:** Повертає стан черги завдань.
+-   **Endpoint:** `GET /api/health`
+-   **Description:** Returns the status of the task queue.

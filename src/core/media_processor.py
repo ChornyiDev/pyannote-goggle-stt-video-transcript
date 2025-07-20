@@ -48,9 +48,9 @@ def process_media(media_url, firestore_ref, language):
         logger.info(f"[{firestore_ref}] Converting {original_file_name} to {wav_file_name} using ffmpeg-python library")
         
         try:
-            # Фінальна спроба: поєднуємо два виправлення:
-            # 1. Додаємо -nostdin як глобальний параметр.
-            # 2. Використовуємо правильний метод .overwrite_output().
+            # Final attempt: combine two fixes:
+            # 1. Add -nostdin as a global parameter.
+            # 2. Use the correct .overwrite_output() method.
             (
                 ffmpeg
                 .input(original_file_name)
@@ -74,11 +74,11 @@ def process_media(media_url, firestore_ref, language):
         full_transcript_map = {}
         speakers = set()
         
-        # Завантаження аудіо для нарізки сегментів вже після конвертації
+        # Load audio for segment slicing after conversion
         logger.info(f"[{firestore_ref}] Loading converted WAV file for segmentation.")
         audio_segment = AudioSegment.from_wav(wav_file_name)
 
-        # Використання ThreadPoolExecutor для паралельних запитів
+        # Use ThreadPoolExecutor for parallel requests
         with ThreadPoolExecutor(max_workers=10) as executor:
             future_to_segment = {}
             for turn, _, speaker in diarization.itertracks(yield_label=True):
@@ -90,7 +90,7 @@ def process_media(media_url, firestore_ref, language):
                 segment_file_path = f"temp_segment_{speaker}_{segment_start_ms}.wav"
                 segment_audio.export(segment_file_path, format="wav")
 
-                # Відправка завдання в пул потоків
+                # Submit task to thread pool
                 future = executor.submit(transcribe_audio, segment_file_path, language)
                 future_to_segment[future] = (speaker, segment_start_ms, segment_file_path)
 
@@ -100,15 +100,15 @@ def process_media(media_url, firestore_ref, language):
                     response = future.result()
                     if response.results:
                         transcript_text = response.results[0].alternatives[0].transcript
-                        # Збереження результату з міткою часу для подальшого сортування
+                        # Save result with timestamp for further sorting
                         full_transcript_map[start_ms] = f"{speaker}: {transcript_text}"
                 except Exception as exc:
                     logger.error(f"Segment at {start_ms} generated an exception: {exc}")
                 finally:
-                    # Видалення тимчасового файлу сегмента
+                    # Remove temporary segment file
                     os.remove(segment_path)
 
-        # Сортування транскриптів за часом початку і об'єднання
+        # Sort transcripts by start time and combine
         sorted_transcripts = [full_transcript_map[key] for key in sorted(full_transcript_map.keys())]
         final_transcript_text = "\n".join(sorted_transcripts)
         logger.info(f"[{firestore_ref}] Finished transcription")
@@ -126,7 +126,7 @@ def process_media(media_url, firestore_ref, language):
             "status": "DONE",
             "transcript": final_transcript_text,
             "metadata": metadata,
-            "finished_at": datetime.now(timezone.utc) # Додавання часу завершення
+            "finished_at": datetime.now(timezone.utc) # Add finish time
         })
 
     except Exception as e:
@@ -134,18 +134,18 @@ def process_media(media_url, firestore_ref, language):
         update_firestore(firestore_ref, {
             "status": "ERROR", 
             "error_message": str(e),
-            "finished_at": datetime.now(timezone.utc) # Додавання часу завершення навіть при помилці
+            "finished_at": datetime.now(timezone.utc) # Add finish time even on error
         })
 
     finally:
         logger.info(f"[{firestore_ref}] Cleaning up temporary files")
-        # Видалення основних файлів
+        # Remove main files
         if original_file_name and os.path.exists(original_file_name):
             os.remove(original_file_name)
         if wav_file_name and os.path.exists(wav_file_name):
             os.remove(wav_file_name)
         
-        # Пошук та видалення всіх тимчасових сегментів
+        # Find and remove all temporary segments
         for temp_file in glob.glob("temp_segment_*.wav"):
             try:
                 os.remove(temp_file)

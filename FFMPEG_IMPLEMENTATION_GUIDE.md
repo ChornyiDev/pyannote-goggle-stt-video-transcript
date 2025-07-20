@@ -1,75 +1,75 @@
-# Практичний посібник: Інтеграція FFMPEG у Python-скрипти
+# Practical Guide: Integrating FFMPEG into Python Scripts
 
-Цей документ узагальнює досвід, отриманий під час налагодження виклику `ffmpeg` з фонового процесу (RQ worker). Він описує поширені проблеми та надійний метод їх вирішення.
-
----
-
-## 1. Проблема: "Зависання" FFMPEG при запуску зі скрипта
-
-Основна проблема полягала в тому, що `ffmpeg` успішно працював при запуску вручну з терміналу, але "зависав" або мовчки завершувався невдачею при запуску з Python-скрипта, особливо з фонового воркера.
-
-**Симптоми:**
--   Процес Python, який викликав `ffmpeg`, не завершувався і не видавав помилок.
--   Не створювався або створювався неповний вихідний файл.
--   Відсутність значного навантаження на процесор чи пам'ять, що вказувало на те, що `ffmpeg` навіть не починав активну роботу.
-
-**Першопричина:**
-Проблема полягає у взаємодії процесів. `ffmpeg` за замовчуванням є інтерактивною програмою. При запуску він може перевіряти стандартний потік вводу (`stdin`), очікуючи на можливі команди (наприклад, `q` для виходу).
-
-Коли `ffmpeg` запускається з фонового процесу (наприклад, RQ worker), цей процес не має підключеного терміналу, і його `stdin` знаходиться в невизначеному стані. Це призводить до "зависання": `ffmpeg` чекає на `stdin`, який ніколи не буде готовий.
+This document summarizes the experience gained while debugging `ffmpeg` calls from a background process (RQ worker). It describes common issues and a reliable solution.
 
 ---
 
-## 2. Помилкові шляхи та їхні недоліки
+## 1. Problem: FFMPEG "Hangs" When Launched from a Script
 
-Під час діагностики було спробовано кілька методів, які не дали бажаного результату:
+The main issue was that `ffmpeg` worked successfully when run manually from the terminal, but would hang or silently fail when launched from a Python script, especially from a background worker.
 
-1.  **Простий виклик `subprocess.run`:** Не працював через проблему зі `stdin` та потенційні проблеми з передачею імен файлів з пробілами.
-2.  **Виклик через `shell=True`:** Хоча цей метод імітує ручний запуск і може вирішити проблему з іменами файлів, він не вирішує проблему очікування `stdin` і вважається менш безпечним.
-3.  **Використання бібліотеки `ffmpeg-python` без параметрів:** Це найчистіший підхід, але він також "зависав", оскільки за замовчуванням не вирішував проблему зі `stdin`.
+**Symptoms:**
+-   The Python process calling `ffmpeg` would not finish and would not show errors.
+-   The output file was not created or was incomplete.
+-   No significant CPU or memory usage, indicating that `ffmpeg` was not actively working.
+
+**Root Cause:**
+The problem lies in process interaction. By default, `ffmpeg` is an interactive program. When launched, it may check the standard input stream (`stdin`), waiting for possible commands (e.g., `q` to quit).
+
+When `ffmpeg` is launched from a background process (such as an RQ worker), this process does not have a connected terminal, and its `stdin` is in an undefined state. This leads to hanging: `ffmpeg` waits for `stdin`, which will never be ready.
 
 ---
 
-## 3. Надійне рішення: `ffmpeg-python` з прапорцем `-nostdin`
+## 2. Incorrect Approaches and Their Drawbacks
 
-Фінальний метод, який виявився надійним і стабільним, поєднує зручність бібліотеки `ffmpeg-python` та ключовий прапорець командного рядка.
+Several methods were tried during diagnostics, but none gave the desired result:
 
-**Ключові компоненти рішення:**
+1.  **Simple `subprocess.run` call:** Did not work due to the `stdin` issue and potential problems with passing filenames containing spaces.
+2.  **Call with `shell=True`:** While this method mimics manual launch and can solve filename issues, it does not solve the `stdin` waiting problem and is considered less secure.
+3.  **Using the `ffmpeg-python` library without parameters:** This is the cleanest approach, but it also hangs by default, as it does not solve the `stdin` issue.
 
-1.  **Використання бібліотеки `ffmpeg-python`:** Вона надає зручний та "пітонічний" інтерфейс для побудови складних команд `ffmpeg`.
-2.  **Прапорець `-nostdin`:** Це найважливіша частина. Цей прапорець явно наказує `ffmpeg` **не намагатися** читати дані зі стандартного потоку вводу. Це усуває першопричину "зависання" при запуску в неінтерактивному середовищі.
-3.  **Правильний синтаксис:** Важливо правильно передати цей глобальний прапорець бібліотеці.
+---
 
-### Приклад робочого коду
+## 3. Reliable Solution: `ffmpeg-python` with the `-nostdin` Flag
 
-Ось фінальний, перевірений код з файлу `src/core/media_processor.py`:
+The final, reliable, and stable method combines the convenience of the `ffmpeg-python` library with a key command-line flag.
+
+**Key solution components:**
+
+1.  **Using the `ffmpeg-python` library:** It provides a convenient and "pythonic" interface for building complex `ffmpeg` commands.
+2.  **The `-nostdin` flag:** This is the most important part. This flag explicitly tells `ffmpeg` **not to attempt** reading from the standard input stream. This eliminates the root cause of hanging in non-interactive environments.
+3.  **Correct syntax:** It is important to correctly pass this global flag to the library.
+
+### Example Working Code
+
+Here is the final, tested code from `src/core/media_processor.py`:
 
 ```python
 import ffmpeg
-# ... інші імпорти
+# ... other imports
 
 # ...
 
 try:
-    # 1. Побудова ланцюжка операцій за допомогою ffmpeg-python
-    # 2. Додавання глобального прапорця -nostdin через параметр `cmd` у функції .run()
-    # 3. Використання .overwrite_output() для коректного перезапису файлів
+    # 1. Build the operation chain using ffmpeg-python
+    # 2. Add the global -nostdin flag via the `cmd` parameter in the .run() function
+    # 3. Use .overwrite_output() for proper file overwriting
     (
         ffmpeg
         .input(original_file_name)
-        .output(wav_file_name, ac=1, ar=16000) # ac=моно, ar=частота
+        .output(wav_file_name, ac=1, ar=16000) # ac=mono, ar=sample rate
         .overwrite_output()
         .run(cmd=['ffmpeg', '-nostdin'], capture_stdout=True, capture_stderr=True)
     )
     logger.info(f"[{firestore_ref}] Conversion successful")
 
 except ffmpeg.Error as e:
-    # Якщо ffmpeg поверне помилку, вона буде зловлена і залогована
+    # If ffmpeg returns an error, it will be caught and logged
     logger.error(f"[{firestore_ref}] FFMPEG Error: {e.stderr.decode()}", exc_info=True)
     raise
 ```
 
-**Пояснення синтаксису `.run(cmd=['ffmpeg', '-nostdin'])`:**
-Параметр `cmd` у функції `.run()` дозволяє перевизначити саму команду запуску. Вказуючи `['ffmpeg', '-nostdin']`, це змушує бібліотеку поставити прапорець `-nostdin` на самий початок команди, що робить його глобальним і вирішує проблему.
+**Explanation of `.run(cmd=['ffmpeg', '-nostdin'])` syntax:**
+The `cmd` parameter in the `.run()` function allows you to override the launch command. By specifying `['ffmpeg', '-nostdin']`, you force the library to put the `-nostdin` flag at the very beginning of the command, making it global and solving the problem.
 
-Цей підхід є надійним, безпечним і рекомендованим для використання `ffmpeg` у будь-яких автоматизованих Python-скриптах, особливо у фонових задачах та чергах.
+This approach is reliable, safe, and recommended for using `ffmpeg` in any automated Python scripts, especially in background tasks and queues.

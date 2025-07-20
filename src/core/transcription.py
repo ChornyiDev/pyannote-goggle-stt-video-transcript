@@ -5,11 +5,11 @@ from pydub import AudioSegment
 from ..utils.logger import logger
 
 def upload_to_gcs(file_path, bucket_name):
-    """Завантажує файл у Google Cloud Storage та повертає його gs:// URI."""
+    """Uploads a file to Google Cloud Storage and returns its gs:// URI."""
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     
-    # Використання унікального імені для файлу в сховищі
+    # Use a unique name for the file in storage
     destination_blob_name = f"temp_transcription_segments/{os.path.basename(file_path)}"
     blob = bucket.blob(destination_blob_name)
 
@@ -20,7 +20,7 @@ def upload_to_gcs(file_path, bucket_name):
     return gcs_uri, destination_blob_name
 
 def delete_from_gcs(bucket_name, blob_name):
-    """Видаляє файл з Google Cloud Storage."""
+    """Deletes a file from Google Cloud Storage."""
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
@@ -30,7 +30,7 @@ def delete_from_gcs(bucket_name, blob_name):
 def transcribe_audio(audio_path, language_code="en-US"):
     client = speech.SpeechClient()
     
-    # Визначення тривалості аудіо
+    # Determine audio duration
     audio_segment = AudioSegment.from_wav(audio_path)
     duration_seconds = len(audio_segment) / 1000.0
 
@@ -40,7 +40,7 @@ def transcribe_audio(audio_path, language_code="en-US"):
         language_code=language_code,
     )
 
-    # Якщо аудіо коротше 60 секунд, використовується синхронний метод
+    # If audio is shorter than 60 seconds, use synchronous method
     if duration_seconds < 60:
         with open(audio_path, "rb") as audio_file:
             content = audio_file.read()
@@ -48,7 +48,7 @@ def transcribe_audio(audio_path, language_code="en-US"):
         response = client.recognize(config=config, audio=audio)
         return response
 
-    # Інакше, використовується асинхронний метод
+    # Otherwise, use asynchronous method
     else:
         logger.info(f"Audio segment is longer than 60s ({duration_seconds}s). Using long-running recognition.")
         bucket_name = os.getenv('FIREBASE_STORAGE_BUCKET')
@@ -58,9 +58,9 @@ def transcribe_audio(audio_path, language_code="en-US"):
         
         operation = client.long_running_recognize(config=config, audio=audio)
         logger.info("Waiting for long-running transcription operation to complete...")
-        response = operation.result(timeout=900) # 15 хвилин тайм-аут на операцію
+        response = operation.result(timeout=900) # 15 minute timeout for the operation
         
-        # Видалення тимчасового файлу зі сховища
+        # Delete temporary file from storage
         delete_from_gcs(bucket_name, blob_name)
         
         return response

@@ -3,8 +3,8 @@ from rq import Queue
 import os
 from dotenv import load_dotenv
 
-# Завантаження змінних середовища на самому початку,
-# для їх доступності у всіх наступних імпортах.
+ # Load environment variables at the very beginning,
+ # so they are available for all subsequent imports.
 load_dotenv()
 
 from .utils.logger import logger

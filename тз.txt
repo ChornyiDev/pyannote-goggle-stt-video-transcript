@@ -1,20 +1,19 @@
-Технічне завдання: Система діаризації та транскрипції аудіо/відео
-1. Опис проєкту
-Розробка API-сервісу для автоматичної діаризації та транскрипції аудіо/відео файлів з використанням Pyannote.audio для діаризації та моделі розпізнавання мовлення для транскрипції. Система інтегрується з Firebase для завантаження медіафайлів та збереження результатів.
+Technical Specification: Audio/Video Diarization and Transcription System
+1. Project Description
+Development of an API service for automatic diarization and transcription of audio/video files using Pyannote.audio for diarization and a speech recognition model for transcription. The system integrates with Firebase for media file upload and result storage.
 
-2. Функціональні вимоги
-2.1. Основні функції
-Прийом запитів з URL аудіо/відео файлу та посиланням на Firebase документ
-Завантаження та обробка аудіо/відео файлів
-Діаризація (визначення спікерів) з використанням Pyannote.audio
-Транскрипція (розпізнавання мови) з використанням сучасних STT моделей
-Збереження результатів у вказаному Firebase документі
-Асинхронна обробка запитів з використанням черги
-2.2. API ендпоінти
-POST /api/transcribe: Ініціює процес діаризації та транскрипції
-2.3. Формат запиту
+2. Functional Requirements
+2.1. Main Functions
+Accept requests with audio/video file URL and Firebase document reference
+Download and process audio/video files
+Diarization (speaker identification) using Pyannote.audio
+Transcription (speech recognition) using modern STT models
+Save results to the specified Firebase document
+Asynchronous request processing using a queue
+2.2. API Endpoints
+POST /api/transcribe: Initiates the diarization and transcription process
+2.3. Request Format
 
-Copy code
 {
   "media_url": "https://storage.firebase.com/path/to/media/file.mp3",
   "firestore_ref": "collection/document_id",
@@ -22,12 +21,10 @@ Copy code
   "api_key": "your_api_key"
 }
 
-Copy code
-2.4. Формат результату (в Firestore)
+2.4. Result Format (in Firestore)
 
-Copy code
 {
-  "transcript": "спікер 1: привіт.\nспікер 2: привіт як справи.\nспікер 1: чудово",
+  "transcript": "speaker 1: hello.\nspeaker 2: hello how are you.\nspeaker 1: great",
   "metadata": {
     "duration": 125.5,
     "speakers_count": 2,
@@ -37,75 +34,74 @@ Copy code
   "status": "DONE" 
 }
 
-Copy code
-2.5. Статуси обробки
-STARTED: Процес обробки розпочато
-DONE: Обробка успішно завершена
-ERROR: Виникла помилка під час обробки
-3. Технічні вимоги
-3.1. Технологічний стек
+2.5. Processing Statuses
+STARTED: Processing started
+DONE: Processing successfully completed
+ERROR: An error occurred during processing
+3. Technical Requirements
+3.1. Technology Stack
 Python 3.9+
-Flask для API
+Flask for API
 Firebase Admin SDK
-Pyannote.audio для діаризації
-google STT модель для транскрипції
-Redis або інша система для реалізації черги задач
-3.2. Підтримувані формати
-Аудіо: WAV, MP3, FLAC, OGG, AAC, AIFF
-Відео: MP4, MOV, AVI, MKV, WebM
-3.3. Обмеження
-Максимальна тривалість медіафайлу: 3 години
-Одночасна обробка не більше 1 файлу
-Максимальний розмір файлу: 500 MB
-3.4. Безпека
-Авторизація через API ключ
-Захист від несанкціонованого доступу
-Безпечне зберігання секретних даних
-4. Архітектурні вимоги
-4.1. Компоненти системи
-API сервер (Flask)
-Система черг для асинхронної обробки
-Модуль діаризації (Pyannote.audio)
-Модуль транскрипції (Whisper або інший)
-Модуль інтеграції з Firebase
-4.2. Процес обробки
-Отримання запиту та валідація даних
-Встановлення статусу STARTED у Firebase
-Додавання завдання в чергу
-Завантаження медіафайлу
-Обробка аудіо (конвертація, якщо потрібно)
-Діаризація для визначення спікерів
-Транскрипція для розпізнавання тексту
-Об'єднання результатів діаризації та транскрипції
-Оновлення Firebase документа з результатами та статусом DONE
-4.3. Обробка помилок
-У випадку помилки статус в Firebase змінюється на ERROR
-Додається інформація про тип помилки
-5. Нефункціональні вимоги
-5.1. Продуктивність
-Час обробки 10-хвилинного аудіо: не більше 5 хвилин
-Ефективне використання ресурсів сервера
-5.2. Надійність
-Логування на всіх етапах процесу
-Механізм відновлення після збоїв
-Видалення тимчасових файлів
-5.3. Масштабованість
-Можливість масштабування системи черг у майбутньому
-6. Розгортання
-6.1. Вимоги до сервера
+Pyannote.audio for diarization
+Google STT model for transcription
+Redis or another system for task queue implementation
+3.2. Supported Formats
+Audio: WAV, MP3, FLAC, OGG, AAC, AIFF
+Video: MP4, MOV, AVI, MKV, WebM
+3.3. Limitations
+Maximum media file duration: 3 hours
+No more than 1 file processed simultaneously
+Maximum file size: 500 MB
+3.4. Security
+Authorization via API key
+Protection against unauthorized access
+Secure storage of secret data
+4. Architectural Requirements
+4.1. System Components
+API server (Flask)
+Queue system for asynchronous processing
+Diarization module (Pyannote.audio)
+Transcription module (Whisper or other)
+Firebase integration module
+4.2. Processing Workflow
+Receive request and validate data
+Set status to STARTED in Firebase
+Add task to queue
+Download media file
+Process audio (convert if needed)
+Diarization for speaker identification
+Transcription for text recognition
+Combine diarization and transcription results
+Update Firebase document with results and DONE status
+4.3. Error Handling
+In case of error, status in Firebase changes to ERROR
+Error type information is added
+5. Non-functional Requirements
+5.1. Performance
+Processing time for 10-minute audio: no more than 5 minutes
+Efficient server resource usage
+5.2. Reliability
+Logging at all process stages
+Recovery mechanism after failures
+Removal of temporary files
+5.3. Scalability
+Ability to scale the queue system in the future
+6. Deployment
+6.1. Server Requirements
 OS: Linux
-CPU: 6 ядер
+CPU: 6 cores
 RAM: 12 GB
-Диск: 20 GB (SSD)
-6.2. Розгортання
-Git-репозиторій з проєктом
-Налаштування середовища через venv
-Конфігурація через змінні середовища
-7. Моніторинг та обслуговування
-Логування всіх етапів обробки
-Моніторинг стану черги завдань
-Розроблення простого веб-інтерфейсу для перегляду статусу (опціонально)
-8. Подальший розвиток
-Додавання підтримки роботи з ідентифікацією спікерів
-Покращення точності розпізнавання для різних мов
-Масштабування для паралельної обробки завдань
+Disk: 20 GB (SSD)
+6.2. Deployment
+Git repository with the project
+Environment setup via venv
+Configuration via environment variables
+7. Monitoring and Maintenance
+Logging of all processing stages
+Monitoring of task queue status
+Development of a simple web interface for status viewing (optional)
+8. Further Development
+Add support for speaker identification
+Improve recognition accuracy for different languages
+Scale for parallel task processing
