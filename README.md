@@ -116,10 +116,14 @@ You can easily change the diarization model to balance speed and accuracy.
 
 ## 🔌 API
 
+
 ### Start Processing
 
 -   **Endpoint:** `POST /api/transcribe`
 -   **Description:** Initiates asynchronous media file processing.
+
+-   **API Key Validation:**
+    > The system only checks for the presence of the `api_key` field in the request. The actual validity of the key is not verified. If the key is missing, the request will be rejected with a 401 error.
 
 -   **Request body (JSON):**
     ```json
