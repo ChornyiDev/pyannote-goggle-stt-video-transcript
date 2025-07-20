@@ -116,7 +116,6 @@ You can easily change the diarization model to balance speed and accuracy.
 
 ## 🔌 API
 
-
 ### Start Processing
 
 -   **Endpoint:** `POST /api/transcribe`
