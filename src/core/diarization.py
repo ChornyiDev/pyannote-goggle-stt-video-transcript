@@ -11,11 +11,14 @@ def diarize_audio(audio_path):
         # Only the step name is logged for simplicity.
         logger.info(f"Diarization step '{step_name}' completed.")
 
-    # use_auth_token=True uses the token
-    # saved via `huggingface-cli login`
+    # Get Hugging Face token from environment variables
+    hf_token = os.getenv("HUGGING_FACE_TOKEN")
+    if not hf_token:
+        raise ValueError("HUGGING_FACE_TOKEN environment variable is not set")
+        
     pipeline = Pipeline.from_pretrained(
         "pyannote/speaker-diarization@2.1",
-        use_auth_token=True
+        use_auth_token=hf_token
     )
     
     # Check for GPU and move model to it
