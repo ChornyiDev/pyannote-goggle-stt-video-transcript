@@ -4,8 +4,8 @@ rq==1.15.1
 redis==4.5.5
 requests==2.31.0
 pyannote.audio==3.1.1
-torch==2.0.1
-torchaudio==2.0.2
+torch==2.7.1
+torchaudio==2.7.1
 ffmpeg-python==0.2.0
 google-cloud-speech==2.20.0
 google-cloud-storage==2.9.0
