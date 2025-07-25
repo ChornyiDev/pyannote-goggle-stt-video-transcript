@@ -62,6 +62,7 @@ def transcribe():
     firestore_ref = data.get('firestore_ref')
     language = data.get('language', 'en-US')
     api_key = data.get('api_key')
+    notification = data.get('notification', False)  # Default to False if not provided
 
     # API key validation (placeholder)
     if not api_key:
@@ -81,9 +82,9 @@ def transcribe():
         logger.error(f"[{firestore_ref}] Failed to update Firestore on request received: {e}", exc_info=True)
         # The process is not interrupted, the error is only logged
 
-    logger.info(f"Enqueuing task for {media_url}")
+    logger.info(f"Enqueuing task for {media_url} with notification={notification}")
     # Increase timeout to 2 hours (7200 seconds) for processing large files
-    q.enqueue('src.tasks.process_media_task', media_url, firestore_ref, language, job_timeout=7200)
+    q.enqueue('src.tasks.process_media_task', media_url, firestore_ref, language, notification, job_timeout=7200)
     logger.info(f"Task enqueued. Current queue length: {len(q)}")
 
     return jsonify({"message": "Processing started"})

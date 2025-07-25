@@ -15,8 +15,9 @@ from .diarization import diarize_audio
 from .transcription import transcribe_audio
 from ..services.firebase_service import update_firestore
 from ..utils.logger import logger
+from ..utils.notification import send_notification
 
-def process_media(media_url, firestore_ref, language):
+def process_media(media_url, firestore_ref, language, notification=False):
     start_time = time.time()
     original_file_name = None
     wav_file_name = None
@@ -152,6 +153,15 @@ def process_media(media_url, firestore_ref, language):
             "finished_at": datetime.now(timezone.utc) # Add finish time
         })
 
+        # Send notification if requested
+        if notification:
+            logger.info(f"[{firestore_ref}] Sending notification webhook")
+            notification_sent = send_notification(firestore_ref)
+            if notification_sent:
+                logger.info(f"[{firestore_ref}] Notification sent successfully")
+            else:
+                logger.warning(f"[{firestore_ref}] Failed to send notification")
+
     except Exception as e:
         logger.error(f"[{firestore_ref}] Error during processing: {e}", exc_info=True)
         update_firestore(firestore_ref, {
@@ -159,6 +169,15 @@ def process_media(media_url, firestore_ref, language):
             "error_message": str(e),
             "finished_at": datetime.now(timezone.utc) # Add finish time even on error
         })
+
+        # Send notification even on error if requested
+        if notification:
+            logger.info(f"[{firestore_ref}] Sending error notification webhook")
+            notification_sent = send_notification(firestore_ref)
+            if notification_sent:
+                logger.info(f"[{firestore_ref}] Error notification sent successfully")
+            else:
+                logger.warning(f"[{firestore_ref}] Failed to send error notification")
 
     finally:
         logger.info(f"[{firestore_ref}] Cleaning up temporary files")

@@ -6,10 +6,10 @@ bind = "0.0.0.0:5012"
 backlog = 2048
 
 # Worker processes
-workers = 2
+workers = 1
 worker_class = "sync"
 worker_connections = 1000
-timeout = 900  # 15 minutes timeout for long-running transcription tasks
+timeout = 7200  # 2 hours timeout for long-running transcription tasks
 keepalive = 2
 
 # Restart workers after this many requests, to help prevent memory leaks
