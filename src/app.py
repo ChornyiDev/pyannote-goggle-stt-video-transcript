@@ -89,12 +89,13 @@ def transcribe():
     return jsonify({"message": "Processing started"})
 
 if __name__ == '__main__':
+    # This block only runs when called directly (development mode)
     # Start the worker in a background process
     start_worker()
     # Register function to stop the worker on exit
     atexit.register(stop_worker)
     
-    logger.info("Starting Flask app")
+    logger.info("Starting Flask app in development mode")
     # Start Flask application
     # use_reloader=False is important to avoid double worker startup
     app.run(host='0.0.0.0', port=5012, debug=True, use_reloader=False)

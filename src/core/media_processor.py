@@ -78,22 +78,45 @@ def process_media(media_url, firestore_ref, language):
         logger.info(f"[{firestore_ref}] Loading converted WAV file for segmentation.")
         audio_segment = AudioSegment.from_wav(wav_file_name)
 
-        # Use ThreadPoolExecutor for parallel requests
+        # First, merge consecutive segments from the same speaker
+        merged_segments = []
+        current_speaker = None
+        current_start = None
+        current_end = None
+        temp_audio = None
+
+        for turn, _, speaker in diarization.itertracks(yield_label=True):
+            speakers.add(speaker)
+            if current_speaker != speaker:
+                # Save previous segment if exists
+                if current_speaker is not None and temp_audio is not None:
+                    segment_file_path = f"temp_segment_{current_speaker}_{int(current_start * 1000)}.wav"
+                    temp_audio.export(segment_file_path, format="wav")
+                    merged_segments.append((current_speaker, current_start, current_end, segment_file_path))
+                # Start new segment
+                current_speaker = speaker
+                current_start = turn.start
+                current_end = turn.end
+                temp_audio = audio_segment[int(turn.start * 1000):int(turn.end * 1000)]
+            else:
+                # Extend current segment
+                current_end = turn.end
+                temp_audio = temp_audio + audio_segment[int(turn.start * 1000):int(turn.end * 1000)]
+
+        # Don't forget the last segment
+        if current_speaker is not None and temp_audio is not None:
+            segment_file_path = f"temp_segment_{current_speaker}_{int(current_start * 1000)}.wav"
+            temp_audio.export(segment_file_path, format="wav")
+            merged_segments.append((current_speaker, current_start, current_end, segment_file_path))
+
+        # Use ThreadPoolExecutor for parallel requests with merged segments
         with ThreadPoolExecutor(max_workers=10) as executor:
             future_to_segment = {}
-            for turn, _, speaker in diarization.itertracks(yield_label=True):
-                speakers.add(speaker)
-                segment_start_ms = int(turn.start * 1000)
-                segment_end_ms = int(turn.end * 1000)
-                
-                segment_audio = audio_segment[segment_start_ms:segment_end_ms]
-                segment_file_path = f"temp_segment_{speaker}_{segment_start_ms}.wav"
-                segment_audio.export(segment_file_path, format="wav")
-
+            for speaker, start, end, segment_file_path in merged_segments:
                 # Submit task to thread pool
                 future = executor.submit(transcribe_audio, segment_file_path, language)
-                future_to_segment[future] = (speaker, segment_start_ms, segment_file_path)
-
+                future_to_segment[future] = (speaker, int(start * 1000), segment_file_path)
+            
             for future in as_completed(future_to_segment):
                 speaker, start_ms, segment_path = future_to_segment[future]
                 try:
