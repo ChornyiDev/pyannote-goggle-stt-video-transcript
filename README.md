@@ -1,16 +1,26 @@
 
 # Media File Processing API
 
-This project is an API service for automatic diarization (speaker recognition) and transcription (speech-to-text) of audio and video files.
+This project is a **production-ready** API service for automatic diarization (speaker recognition) and transcription (speech-to-text) of audio and video files with optional webhook notifications.
 
 ## 🚀 Technologies
 
--   **Server:** Flask
+-   **Server:** Gunicorn + Flask (Production WSGI)
 -   **Background tasks:** Redis + RQ (Redis Queue)
--   **Diarization:** `pyannote`
+-   **Diarization:** `pyannote` with speaker segment merging
 -   **Transcription:** Google Cloud Speech-to-Text
 -   **Data storage:** Firebase (Firestore, Storage)
 -   **Conversion:** FFMPEG
+-   **Notifications:** Webhook system for completion alerts
+
+## ✨ Key Features
+
+-   **Speaker Segment Merging:** Consecutive segments from the same speaker are automatically merged for coherent transcripts
+-   **Production Ready:** Gunicorn WSGI server with systemd service management
+-   **Webhook Notifications:** Optional POST notifications when processing completes
+-   **Long File Support:** 2-hour timeout for processing large video files
+-   **Parallel Transcription:** Multiple audio segments processed simultaneously
+-   **Auto Cleanup:** Temporary files automatically removed after processing
 
 ---
 
@@ -57,6 +67,9 @@ This project is an API service for automatic diarization (speaker recognition) a
 
     # Hugging Face access token
     HUGGING_FACE_TOKEN=your_hugging_face_token
+
+    # Optional: Webhook notification URL
+    NOTIFICATION_SERVICE_URL=https://your-webhook-service.com/webhook
     ```
 
 2.  **Login to Hugging Face:**
@@ -71,18 +84,43 @@ This project is an API service for automatic diarization (speaker recognition) a
 
 ## ▶️ Running
 
-To start the server and worker, run the command from the **project root directory**:
+### Development Mode
+
+To start the server and worker in development mode, run from the **project root directory**:
 
 ```bash
 # Activate the virtual environment
-# source venv/bin/activate
+source venv/bin/activate
 
 python3 -m src.app
 ```
 
 **Important:** Running via `python3 -m src.app` is critical for correct imports.
 
+### Production Mode
+
+For production deployment with Gunicorn:
+
+```bash
+# Install production dependencies
+pip install gunicorn
+
+# Run with Gunicorn
+gunicorn -c gunicorn.conf.py wsgi:app
+```
+
 The server will be available at `http://localhost:5012`.
+
+### Systemd Service (Recommended for Production)
+
+Configure as a systemd service for automatic startup and management:
+
+```bash
+# The service is already configured if using the included setup
+sudo systemctl start video-transcript
+sudo systemctl enable video-transcript
+sudo systemctl status video-transcript
+```
 
 ---
 
@@ -130,9 +168,18 @@ You can easily change the diarization model to balance speed and accuracy.
       "media_url": "gs://your-bucket/path/to/file.mp4",
       "firestore_ref": "collection_name/document_id",
       "language": "en-US",
-      "api_key": "your_api_key"
+      "api_key": "your_api_key",
+      "notification": true
     }
     ```
+
+#### Request Parameters:
+
+- `media_url` (required): URL to the media file (supports HTTP/HTTPS and gs:// URLs)
+- `firestore_ref` (required): Firestore document reference for storing results
+- `language` (optional): Language code for transcription (default: "en-US")
+- `api_key` (required): API key for authentication
+- `notification` (optional): Set to `true` to receive webhook notification when processing completes
 
 -   **Response (202):**
     ```json
@@ -145,3 +192,66 @@ You can easily change the diarization model to balance speed and accuracy.
 
 -   **Endpoint:** `GET /api/health`
 -   **Description:** Returns the status of the task queue.
+
+---
+
+## 🔔 Webhook Notifications
+
+When `notification: true` is included in the transcription request, the system will send a POST webhook to the configured `NOTIFICATION_SERVICE_URL` after processing completes.
+
+### Webhook Payload
+
+The webhook sends a JSON payload containing the Firestore reference:
+
+```json
+{
+  "firestore_ref": "collection_name/document_id"
+}
+```
+
+### Notification Triggers
+
+- **Success:** When transcription completes successfully (`status: "DONE"`)
+- **Error:** When processing fails (`status: "ERROR"`)
+
+### Configuration
+
+Set the webhook URL in your `.env` file:
+
+```env
+NOTIFICATION_SERVICE_URL=https://your-webhook-service.com/webhook
+```
+
+### Example Integration
+
+Use notifications to trigger downstream processes like:
+- Sending completion emails
+- Updating external systems
+- Starting additional processing workflows
+- Analytics and monitoring
+
+---
+
+## 🏗️ Architecture
+
+For detailed system architecture and component descriptions, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+---
+
+## 📝 Speaker Segment Merging
+
+The system automatically merges consecutive audio segments from the same speaker to create more coherent and readable transcripts.
+
+**Before merging:**
+```
+SPEAKER_00: hello hello
+SPEAKER_00: hello  
+SPEAKER_00: what's up how are you doing
+```
+
+**After merging:**
+```
+SPEAKER_00: hello hello hello what's up how are you doing
+```
+
+This feature significantly improves transcript readability and reduces fragmentation.
