@@ -15,6 +15,7 @@ This project is a **production-ready** API service for automatic diarization (sp
 
 ## ✨ Key Features
 
+-   **Structured Transcript Format:** Results stored as organized array with speaker, time, and text for each segment
 -   **Speaker Segment Merging:** Consecutive segments from the same speaker are automatically merged for coherent transcripts
 -   **Production Ready:** Gunicorn WSGI server with systemd service management
 -   **Webhook Notifications:** Optional POST notifications when processing completes
@@ -188,6 +189,8 @@ You can easily change the diarization model to balance speed and accuracy.
     }
     ```
 
+**Processing Results:** The transcription results are stored in Firestore as a structured array. See the [Response Format](#-response-format) section for detailed structure.
+
 ### Check Status
 
 -   **Endpoint:** `GET /api/health`
@@ -238,20 +241,94 @@ For detailed system architecture and component descriptions, see [ARCHITECTURE.m
 
 ---
 
-## 📝 Speaker Segment Merging
+## 📝 Speaker Segment Processing
 
-The system automatically merges consecutive audio segments from the same speaker to create more coherent and readable transcripts.
+The system automatically processes and merges consecutive audio segments from the same speaker to create coherent and readable transcripts in structured format.
 
-**Before merging:**
+### Segment Merging
+
+**Raw segments (before merging):**
 ```
 SPEAKER_00: hello hello
 SPEAKER_00: hello  
 SPEAKER_00: what's up how are you doing
 ```
 
-**After merging:**
-```
-SPEAKER_00: hello hello hello what's up how are you doing
+**Processed result (after merging):**
+```json
+{
+  "speaker": "SPEAKER_00",
+  "time": "00:00",
+  "transcript": "hello hello hello what's up how are you doing"
+}
 ```
 
-This feature significantly improves transcript readability and reduces fragmentation.
+### Time Stamping
+
+Each merged segment includes:
+- **Speaker identification** for clear dialogue attribution
+- **Time stamps** in HH:MM format for easy navigation
+- **Clean text** with merged consecutive utterances
+
+This processing significantly improves transcript readability and provides structured data for frontend applications.
+
+---
+
+## 📋 Response Format
+
+### Firestore Document Structure
+
+When processing completes, the following data is stored in Firestore:
+
+```json
+{
+  "status": "DONE",
+  "transcript": [
+    {
+      "speaker": "SPEAKER_00",
+      "time": "00:00",
+      "transcript": "Hello, how are you today?"
+    },
+    {
+      "speaker": "SPEAKER_01", 
+      "time": "00:15",
+      "transcript": "I am doing great, thank you for asking!"
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "time": "00:30",
+      "transcript": "That is wonderful to hear."
+    }
+  ],
+  "metadata": {
+    "duration": 125.5,
+    "speakers_count": 2,
+    "processing_time": 45.3,
+    "language": "en-US"
+  },
+  "received_at": "2025-08-01T10:00:00Z",
+  "finished_at": "2025-08-01T10:02:15Z"
+}
+```
+
+### Status Values
+
+- `"QUEUED"` - Task has been queued for processing
+- `"DOWNLOADING"` - Media file is being downloaded
+- `"PROCESSING"` - Diarization and transcription in progress
+- `"DONE"` - Processing completed successfully
+- `"ERROR"` - Processing failed (includes `error_message` field)
+
+### Transcript Structure
+
+Each transcript segment contains:
+- `speaker` - Speaker identifier (e.g., "SPEAKER_00", "SPEAKER_01")
+- `time` - Start time in HH:MM format for easy display
+- `transcript` - The transcribed text for this segment
+
+### Features
+
+- Segments are automatically sorted by time
+- Consecutive segments from the same speaker are merged
+- Time format is optimized for frontend consumption
+- Structured format enables easy filtering and searching

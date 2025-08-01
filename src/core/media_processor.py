@@ -17,6 +17,25 @@ from ..services.firebase_service import update_firestore
 from ..utils.logger import logger
 from ..utils.notification import send_notification
 
+def format_transcript_segments(transcript_segments):
+    """Format transcript segments as array of objects with speaker, time, and text"""
+    formatted_segments = []
+    
+    for segment in transcript_segments:
+        # Convert start time to HH:MM format
+        start_seconds = int(segment['start'])
+        hours = start_seconds // 3600
+        minutes = (start_seconds % 3600) // 60
+        time_formatted = f"{hours:02d}:{minutes:02d}"
+        
+        formatted_segments.append({
+            "speaker": segment['speaker'],
+            "time": time_formatted,
+            "transcript": segment['text']
+        })
+    
+    return formatted_segments
+
 def process_media(media_url, firestore_ref, language, notification=False):
     start_time = time.time()
     original_file_name = None
@@ -72,7 +91,7 @@ def process_media(media_url, firestore_ref, language, notification=False):
         logger.info(f"[{firestore_ref}] Finished diarization")
 
         logger.info(f"[{firestore_ref}] Starting parallel transcription of {len(diarization)} segments")
-        full_transcript_map = {}
+        transcript_segments = []  # Store structured segments instead of map
         speakers = set()
         
         # Load audio for segment slicing after conversion
@@ -116,25 +135,31 @@ def process_media(media_url, firestore_ref, language, notification=False):
             for speaker, start, end, segment_file_path in merged_segments:
                 # Submit task to thread pool
                 future = executor.submit(transcribe_audio, segment_file_path, language)
-                future_to_segment[future] = (speaker, int(start * 1000), segment_file_path)
+                future_to_segment[future] = (speaker, start, segment_file_path)
             
             for future in as_completed(future_to_segment):
-                speaker, start_ms, segment_path = future_to_segment[future]
+                speaker, start_time, segment_path = future_to_segment[future]
                 try:
                     response = future.result()
                     if response.results:
                         transcript_text = response.results[0].alternatives[0].transcript
-                        # Save result with timestamp for further sorting
-                        full_transcript_map[start_ms] = f"{speaker}: {transcript_text}"
+                        # Store structured segment data
+                        transcript_segments.append({
+                            'speaker': speaker,
+                            'start': start_time,
+                            'text': transcript_text
+                        })
                 except Exception as exc:
-                    logger.error(f"Segment at {start_ms} generated an exception: {exc}")
+                    logger.error(f"Segment at {start_time} generated an exception: {exc}")
                 finally:
                     # Remove temporary segment file
                     os.remove(segment_path)
 
-        # Sort transcripts by start time and combine
-        sorted_transcripts = [full_transcript_map[key] for key in sorted(full_transcript_map.keys())]
-        final_transcript_text = "\n".join(sorted_transcripts)
+        # Sort segments by start time
+        transcript_segments.sort(key=lambda x: x['start'])
+        
+        # Format transcript as structured array
+        formatted_transcript = format_transcript_segments(transcript_segments)
         logger.info(f"[{firestore_ref}] Finished transcription")
 
         processing_time = time.time() - start_time
@@ -148,7 +173,7 @@ def process_media(media_url, firestore_ref, language, notification=False):
         logger.info(f"[{firestore_ref}] Updating status to DONE")
         update_firestore(firestore_ref, {
             "status": "DONE",
-            "transcript": final_transcript_text,
+            "transcript": formatted_transcript,  # Now it's a structured array
             "metadata": metadata,
             "finished_at": datetime.now(timezone.utc) # Add finish time
         })
